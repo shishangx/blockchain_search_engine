@@ -1,0 +1,96 @@
+name: Scalable API Test
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install pytest requests
+
+      - name: Run Tests
+        # Generate a JUnit XML report. '|| true' ensures we don't stop the flow on failure.
+        run: pytest --junitxml=report.xml || true
+
+      - name: Parse Results
+        id: results
+        run: |
+          # Use grep/sed to extract stats from the XML root element
+          TOTAL=$(grep -oP 'tests="\K[^"]+' report.xml)
+          FAILURES=$(grep -oP 'failures="\K[^"]+' report.xml)
+          ERRORS=$(grep -oP 'errors="\K[^"]+' report.xml)
+          SKIPPED=$(grep -oP 'skipped="\K[^"]+' report.xml)
+          
+          # Calculate Passed
+          FAILED_TOTAL=$((FAILURES + ERRORS))
+          PASSED=$((TOTAL - FAILED_TOTAL - SKIPPED))
+          
+          # Determine Status Emoji
+          if [ "$FAILED_TOTAL" -eq "0" ]; then
+            echo "status_emoji=✅" >> $GITHUB_OUTPUT
+            echo "status_text=All Systems Go" >> $GITHUB_OUTPUT
+          else
+            echo "status_emoji=🚨" >> $GITHUB_OUTPUT
+            echo "status_text=Failures Detected" >> $GITHUB_OUTPUT
+          fi
+
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED_TOTAL" >> $GITHUB_OUTPUT
+          echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ steps.results.outputs.failed == '0' && '#36a64f' || '#ff0000' }}",
+                  "blocks": [
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "${{ steps.results.outputs.status_emoji }} *API Test Results: ${{ steps.results.outputs.status_text }}*"
+                      }
+                    },
+                    {
+                      "type": "section",
+                      "fields": [
+                        { "type": "mrkdwn", "text": "*Total:* ${{ steps.results.outputs.total }}" },
+                        { "type": "mrkdwn", "text": "*Passed:* ${{ steps.results.outputs.passed }}" },
+                        { "type": "mrkdwn", "text": "*Failed:* ${{ steps.results.outputs.failed }}" },
+                        { "type": "mrkdwn", "text": "*Skipped:* ${{ steps.results.outputs.skipped }}" }
+                      ]
+                    },
+                    {
+                      "type": "actions",
+                      "elements": [
+                        {
+                          "type": "button",
+                          "text": { "type": "plain_text", "text": "View Detailed Logs" },
+                          "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+      - name: Archive Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-report
+          path: report.xml
