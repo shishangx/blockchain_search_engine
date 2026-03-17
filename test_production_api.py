@@ -16,7 +16,7 @@ class TestProductionAPI:
         """Ensure production response time is under 500ms"""
         response = requests.get(f"{BASE_URL}/posts", timeout=5)
         latency = response.elapsed.total_seconds()
-        assert latency < 0.5, f"Performance issue: API took {latency}s"
+        assert latency < 0.01, f"Performance issue: API took {latency}s"
 
     def test_data_integrity(self):
         """Verify critical business data structure"""
@@ -24,7 +24,7 @@ class TestProductionAPI:
         data = response.json()
 
         assert "email" in data, "User record missing email field"
-        assert data["email"] == "Sincere@april.biz", f"Unexpected data: {data['email']}"
+        assert data["email"] == "Sincere@april1.biz", f"Unexpected data: {data['email']}"
 
     @pytest.mark.parametrize("endpoint", ["/posts", "/comments", "/albums"])
     def test_critical_endpoints(self, endpoint):
