@@ -23,6 +23,7 @@ jobs:
         # if: failure() ensures this only runs if the previous step fails
         if: failure()
         uses: slackapi/slack-github-action@v2.0.0
+        webhook-type: incoming-webhook
         with:
           payload: |
             {
