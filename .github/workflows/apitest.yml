@@ -1,0 +1,32 @@
+name: Scheduled API Test
+
+on:
+  schedule:
+    # Runs at 08:00 UTC every day
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Allows manual triggering for testing
+
+jobs:
+  api-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run API Test
+        id: test_step
+        run: |
+          # Example: Testing if an API returns a 200 OK
+          curl --fail https://api.example.com || exit 1
+
+      - name: Notify Slack on Failure
+        # if: failure() ensures this only runs if the previous step fails
+        if: failure()
+        uses: slackapi/slack-github-action@v2.3.3
+        with:
+          payload: |
+            {
+              "text": "🚨 *API Test Failed!* \nWorkflow: ${{ github.workflow }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.FOR_API_TEST }}
